@@ -308,14 +308,10 @@ class Field(object):
         ).astype(xp.uint8)
         # color G ... -Y 方向
         img[:,:,1] = xp.where(
-            uy < 0,
-            (xp.max(uy) - uy) * 255 / (xp.max(uy) - xp.min(uy)),
-            0).astype(xp.uint8)
+            uy < 0, uy * 255 / xp.min(uy), 0).astype(xp.uint8)
         # color R ... +Y 方向
         img[:,:,2] = xp.where(
-            uy > 0,
-            (uy - xp.min(uy)) * 255 / (xp.max(uy) - xp.min(uy)),
-            0).astype(xp.uint8)
+            uy > 0, uy * 255 / xp.max(uy), 0).astype(xp.uint8)
         # 円柱のある場所を塗りつぶす
         img[self._cylinder[::cell_size,::cell_size],:] = 127
         print('  asnumpy')
