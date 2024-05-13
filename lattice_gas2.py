@@ -299,6 +299,62 @@ class Field(object):
              xp.where((self._cells & DIR_6) != 0,
                       xp.asanyarray(m_y(INDEX_6)), xp.asanyarray(0))),
             AVERAGE, mode = 'same', boundary = 'wrap')[::cell_size,::cell_size]
+        # 回転を計算
+        vorticity = signal.convolve2d(
+            (xp.roll(ux, -1, axis=0) - xp.roll(ux, 1, axis=0)) -
+            (xp.roll(uy, -1, axis=1) - xp.roll(uy, 1, axis=1)),
+            AVERAGE, mode = 'same', boundary = 'wrap')
+        gh = int(self._height / cell_size)
+        gw = int(self._width / cell_size)
+        img = xp.zeros([gh, gw, 3], dtype = xp.uint8)
+        # color B ... -X 方向への流速
+        img[:,:,0] = (
+            (xp.max(ux) - ux) * 255 / (xp.max(ux) - xp.min(ux))
+        ).astype(xp.uint8)
+        # color G ... 右回転
+        img[:,:,1] = xp.where(
+            vorticity < 0,
+            vorticity * 255 / xp.min(vorticity),
+            xp.asanyarray(0)).astype(xp.uint8)
+        # color R ... 左回転
+        img[:,:,2] = xp.where(
+            vorticity > 0,
+            vorticity * 255 / xp.max(vorticity),
+            xp.asanyarray(0)).astype(xp.uint8)
+        # 円柱のある場所を塗りつぶす
+        img[self._cylinder[::cell_size,::cell_size],:] = 127
+        print('  asnumpy')
+        return xp.asnumpy(img)
+    def get_current_bgr_image0(self, cell_size: int) -> Any:
+        # X 方向, Y 方向への流速を計算する
+        ux = signal.convolve2d(
+            (xp.where((self._cells & DIR_1) != 0,
+                      xp.asanyarray(m_x(INDEX_1)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_2) != 0,
+                      xp.asanyarray(m_x(INDEX_2)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_3) != 0,
+                      xp.asanyarray(m_x(INDEX_3)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_4) != 0,
+                      xp.asanyarray(m_x(INDEX_4)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_5) != 0,
+                      xp.asanyarray(m_x(INDEX_5)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_6) != 0,
+                      xp.asanyarray(m_x(INDEX_6)), xp.asanyarray(0))),
+            AVERAGE, mode = 'same', boundary = 'wrap')[::cell_size,::cell_size]
+        uy = signal.convolve2d(
+            (xp.where((self._cells & DIR_1) != 0,
+                      xp.asanyarray(m_y(INDEX_1)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_2) != 0,
+                      xp.asanyarray(m_y(INDEX_2)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_3) != 0,
+                      xp.asanyarray(m_y(INDEX_3)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_4) != 0,
+                      xp.asanyarray(m_y(INDEX_4)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_5) != 0,
+                      xp.asanyarray(m_y(INDEX_5)), xp.asanyarray(0)) +
+             xp.where((self._cells & DIR_6) != 0,
+                      xp.asanyarray(m_y(INDEX_6)), xp.asanyarray(0))),
+            AVERAGE, mode = 'same', boundary = 'wrap')[::cell_size,::cell_size]
         gh = int(self._height / cell_size)
         gw = int(self._width / cell_size)
         img = xp.zeros([gh, gw, 3], dtype = xp.uint8)
