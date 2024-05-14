@@ -1,9 +1,11 @@
 import argparse
 import datetime
+import math
 import random
 import time
 import cupy as xp
 from cupyx.scipy import signal
+from cupyx.scipy.ndimage import affine_transform
 #import numpy as xp
 #from scipy import signal
 import cv2
@@ -197,7 +199,7 @@ class Field(object):
             xp.arange(width), xp.arange(height))
         self._cylinder = (
             (self._mesh_x - self._width / 4) **2 +
-            (self._mesh_y - self._height / 2) ** 2 < (self._height / 20) ** 2)
+            (self._mesh_y - self._height / 2) ** 2 * (3 / 4) < (self._height / 20) ** 2)
     def init_random(self, dens: float) -> None:
         self._cells = (
             xp.where(xp.random.rand(self._height, self._width) * 100 <= dens,
@@ -323,57 +325,10 @@ class Field(object):
             xp.asanyarray(0)).astype(xp.uint8)
         # 円柱のある場所を塗りつぶす
         img[self._cylinder[::cell_size,::cell_size],:] = 127
-        print('  asnumpy')
-        return xp.asnumpy(img)
-    def get_current_bgr_image0(self, cell_size: int) -> Any:
-        # X 方向, Y 方向への流速を計算する
-        ux = signal.convolve2d(
-            (xp.where((self._cells & DIR_1) != 0,
-                      xp.asanyarray(m_x(INDEX_1)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_2) != 0,
-                      xp.asanyarray(m_x(INDEX_2)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_3) != 0,
-                      xp.asanyarray(m_x(INDEX_3)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_4) != 0,
-                      xp.asanyarray(m_x(INDEX_4)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_5) != 0,
-                      xp.asanyarray(m_x(INDEX_5)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_6) != 0,
-                      xp.asanyarray(m_x(INDEX_6)), xp.asanyarray(0))),
-            AVERAGE, mode = 'same', boundary = 'wrap')[::cell_size,::cell_size]
-        uy = signal.convolve2d(
-            (xp.where((self._cells & DIR_1) != 0,
-                      xp.asanyarray(m_y(INDEX_1)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_2) != 0,
-                      xp.asanyarray(m_y(INDEX_2)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_3) != 0,
-                      xp.asanyarray(m_y(INDEX_3)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_4) != 0,
-                      xp.asanyarray(m_y(INDEX_4)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_5) != 0,
-                      xp.asanyarray(m_y(INDEX_5)), xp.asanyarray(0)) +
-             xp.where((self._cells & DIR_6) != 0,
-                      xp.asanyarray(m_y(INDEX_6)), xp.asanyarray(0))),
-            AVERAGE, mode = 'same', boundary = 'wrap')[::cell_size,::cell_size]
-        gh = int(self._height / cell_size)
-        gw = int(self._width / cell_size)
-        img = xp.zeros([gh, gw, 3], dtype = xp.uint8)
-        # color B ... -X 方向
-        img[:,:,0] = (
-            (xp.max(ux) - ux) * 255 / (xp.max(ux) - xp.min(ux))
-        ).astype(xp.uint8)
-        # color G ... -Y 方向
-        img[:,:,1] = xp.where(
-            uy < 0,
-            (xp.max(uy) - uy) * 255 / (xp.max(uy) - xp.min(uy)),
-            0).astype(xp.uint8)
-        # color R ... +Y 方向
-        img[:,:,2] = xp.where(
-            uy > 0,
-            (uy - xp.min(uy)) * 255 / (xp.max(uy) - xp.min(uy)),
-            0).astype(xp.uint8)
-        # 円柱のある場所を塗りつぶす
-        img[self._cylinder[::cell_size,::cell_size],:] = 127
+        img = affine_transform(img, xp.array([
+            [1, 0, 0],
+            [0, math.sqrt(3) / 2, 0],
+            [0, 0, 1]]))
         print('  asnumpy')
         return xp.asnumpy(img)
 class Animation(object):

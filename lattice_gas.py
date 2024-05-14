@@ -1,9 +1,11 @@
 import argparse
 import datetime
+import math
 import random
 import time
 import cupy as xp
 from cupyx.scipy import signal
+from cupyx.scipy.ndimage import affine_transform
 #import numpy as xp
 #from scipy import signal
 import cv2
@@ -197,7 +199,7 @@ class Field(object):
             xp.arange(width), xp.arange(height))
         self._cylinder = (
             (self._mesh_x - self._width / 4) **2 +
-            (self._mesh_y - self._height / 2) ** 2 < (self._height / 20) ** 2)
+            (self._mesh_y - self._height / 2) ** 2 * (3 / 4) < (self._height / 20) ** 2)
     def init_random(self, dens: float) -> None:
         self._cells = (
             xp.where(xp.random.rand(self._height, self._width) * 100 <= dens,
@@ -314,6 +316,10 @@ class Field(object):
             uy > 0, uy * 255 / xp.max(uy), 0).astype(xp.uint8)
         # 円柱のある場所を塗りつぶす
         img[self._cylinder[::cell_size,::cell_size],:] = 127
+        img = affine_transform(img, xp.array([
+            [1, 0, 0],
+            [0, math.sqrt(3) / 2, 0],
+            [0, 0, 1]]))
         print('  asnumpy')
         return xp.asnumpy(img)
 class Animation(object):
