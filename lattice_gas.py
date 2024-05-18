@@ -29,40 +29,26 @@ DIR_4 = 1 << INDEX_4
 DIR_5 = 1 << INDEX_5
 DIR_6 = 1 << INDEX_6
 
-E = xp.array([
-    [0, 0, 0],
-    [0, 0, 1],
-    [0, 0, 0]], dtype = xp.uint8)
-NE = xp.array([
-    [0, 0, 1],
-    [0, 0, 0],
-    [0, 0, 0]], dtype = xp.uint8)
-N = xp.array([
-    [0, 1, 0],
-    [0, 0, 0],
-    [0, 0, 0]], dtype = xp.uint8)
-NW = xp.array([
-    [1, 0, 0],
-    [0, 0, 0],
-    [0, 0, 0]], dtype = xp.uint8)
-W = xp.array([
-    [0, 0, 0],
-    [1, 0, 0],
-    [0, 0, 0]], dtype = xp.uint8)
-WS = xp.array([
-    [0, 0, 0],
-    [0, 0, 0],
-    [1, 0, 0]], dtype = xp.uint8)
-S = xp.array([
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 1, 0]], dtype = xp.uint8)
-SE = xp.array([
-    [0, 0, 0],
-    [0, 0, 0],
-    [0, 0, 1]], dtype = xp.uint8)
+def send_e(cells: Any) -> Any:
+    return xp.roll(cells, 1, axis = 1)
+def send_ne(cells: Any) -> Any:
+    return xp.roll(xp.roll(cells, 1, axis = 1), -1, axis = 0)
+def send_n(cells: Any) -> Any:
+    return xp.roll(cells,                       -1, axis = 0)
+def send_nw(cells: Any) -> Any:
+    return xp.roll(xp.roll(cells, -1, axis = 1), -1, axis = 0)
+def send_w(cells: Any) -> Any:
+    return xp.roll(cells, -1, axis = 1)
+def send_sw(cells: Any) -> Any:
+    return xp.roll(xp.roll(cells, -1, axis = 1), 1, axis = 0)
+def send_s(cells: Any) -> Any:
+    return xp.roll(cells,                        1, axis = 0)
+def send_se(cells: Any) -> Any:
+    return xp.roll(xp.roll(cells, 1, axis = 1), 1, axis = 0)
 
-AVERAGE = xp.ones((32, 32), dtype = xp.cfloat) / 1024.0
+#AVERAGE = xp.ones((32, 32), dtype = xp.cfloat) / 1024.0
+AVERAGE = xp.ones((8, 8), dtype = xp.cfloat) / 64.0
+#AVERAGE = xp.ones((4, 4), dtype = xp.cfloat) / 16.0
 
 def m_x(index: int) -> Any:
     u'''
@@ -220,36 +206,24 @@ class Field(object):
         cells2 = xp.where(
             (self._mesh_y % 2) == 1,
             ((self._cells & DIR_0) +
-             (signal.convolve2d(self._cells, E,
-                                mode = 'same', boundary = 'wrap') & DIR_1) +
-             (signal.convolve2d(self._cells, NE,
-                                mode = 'same', boundary = 'wrap') & DIR_2) +
-             (signal.convolve2d(self._cells, N,
-                                mode = 'same', boundary = 'wrap') & DIR_3) +
-             (signal.convolve2d(self._cells, W,
-                                mode = 'same', boundary = 'wrap') & DIR_4) +
-             (signal.convolve2d(self._cells, S,
-                                mode = 'same', boundary = 'wrap') & DIR_5) +
-             (signal.convolve2d(self._cells, SE,
-                                mode = 'same', boundary = 'wrap') & DIR_6)),
+             send_e(self._cells & DIR_1) +
+             send_ne(self._cells & DIR_2) +
+             send_n(self._cells & DIR_3) +
+             send_w(self._cells & DIR_4) +
+             send_s(self._cells & DIR_5) +
+             send_se(self._cells & DIR_6)),
             ((self._cells & DIR_0) +
-             (signal.convolve2d(self._cells, E,
-                                mode = 'same', boundary = 'wrap') & DIR_1) +
-             (signal.convolve2d(self._cells, N,
-                                mode = 'same', boundary = 'wrap') & DIR_2) +
-             (signal.convolve2d(self._cells, NW,
-                                mode = 'same', boundary = 'wrap') & DIR_3) +
-             (signal.convolve2d(self._cells, W,
-                                mode = 'same', boundary = 'wrap') & DIR_4) +
-             (signal.convolve2d(self._cells, WS,
-                                mode = 'same', boundary = 'wrap') & DIR_5) +
-             (signal.convolve2d(self._cells, S,
-                                mode = 'same', boundary = 'wrap') & DIR_6)))
+             send_e(self._cells & DIR_1) +
+             send_n(self._cells & DIR_2) +
+             send_nw(self._cells & DIR_3) +
+             send_w(self._cells & DIR_4) +
+             send_sw(self._cells & DIR_5) +
+             send_s(self._cells & DIR_6)))
         self._cells = cells2
     def collision(self) -> None:
-        print('    apply_rule')
+        #print('    apply_rule')
         self._cells = self._rule.apply_rule(self._cells)
-        print('    cylindrical shape boundry')
+        #print('    cylindrical shape boundry')
         self._cells = xp.where(
             self._cylinder,
             xp.where((self._cells & DIR_1) != 0,
@@ -320,7 +294,7 @@ class Field(object):
             [1, 0, 0],
             [0, math.sqrt(3) / 2, 0],
             [0, 0, 1]]))
-        print('  asnumpy')
+        #print('  asnumpy')
         return xp.asnumpy(img)
 class Animation(object):
     def __init__(self, width: int, height: int,
@@ -346,16 +320,16 @@ def print_elapsed_time(start_time: float, msg: str) -> None:
         msg))
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument('--width', type = int, default = 4096,
-                        help = 'Field width (default 4096)')
-    parser.add_argument('--height', type = int, default = 2048,
-                        help = 'Field height (default 2048)')
-    parser.add_argument('--size', type = int, default = 4,
-                        help = 'Magnify cell size (default 4)')
-    parser.add_argument('--dens', type = float, default = 30,
-                        help = 'Density parameter from 0 to 100 (default 30)')
-    parser.add_argument('--loop', type = int, default = 100000,
-                        help = 'loop count (default 100000)')
+    parser.add_argument('--width', type = int, default = 2048,
+                        help = 'Field width (default 2048)')
+    parser.add_argument('--height', type = int, default = 1024,
+                        help = 'Field height (default 1024)')
+    parser.add_argument('--size', type = int, default = 2,
+                        help = 'Magnify cell size (default 2)')
+    parser.add_argument('--dens', type = float, default = 10,
+                        help = 'Density parameter from 0 to 100 (default 10)')
+    parser.add_argument('--loop', type = int, default = 10000,
+                        help = 'loop count (default 10000)')
     parser.add_argument('--skip', type = int, default = 10,
                         help = 'skip generating image (default 10 times)')
     parser.add_argument('--animation', action = 'store_true',
@@ -382,15 +356,15 @@ def main() -> None:
         animation = Animation(bgr_width, bgr_height, 100, outfile = 'fhp.mp4')
     start_time = time.time()
     for n in range(loop):
-        print('  flow')
+        #print('  flow')
         field.flow()
-        print('  collision')
+        #print('  collision')
         field.collision()
         if skip < 2 or n % skip == 0:
             print_elapsed_time(start_time, '{} / {}'.format(n, loop))
-            print('  bgr_image')
+            #print('  bgr_image')
             bgr_img = field.get_current_bgr_image(cell_size)
-            print('  show')
+            #print('  show')
             cv2.imshow("Ceullular Automata", bgr_img)
             key = cv2.waitKey(waiting)
             if key == ord("+"):
@@ -400,7 +374,7 @@ def main() -> None:
             if key == ord("q"):
                 break
             if args.animation:
-                print('  animation')
+                #print('  animation')
                 animation.capture(bgr_img)
     if args.animation:
         print('dumping mp4 animation...')
