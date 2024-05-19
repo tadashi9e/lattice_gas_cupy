@@ -46,9 +46,9 @@ def send_s(cells: Any) -> Any:
 def send_se(cells: Any) -> Any:
     return xp.roll(xp.roll(cells, 1, axis = 1), 1, axis = 0)
 
-#AVERAGE = xp.ones((32, 32), dtype = xp.cfloat) / 1024.0
-AVERAGE = xp.ones((8, 8), dtype = xp.cfloat) / 64.0
-#AVERAGE = xp.ones((4, 4), dtype = xp.cfloat) / 16.0
+#AVERAGE = xp.ones((32, 32), dtype = xp.float16) / 1024.0
+AVERAGE = xp.ones((8, 8), dtype = xp.float16) / 64.0
+#AVERAGE = xp.ones((4, 4), dtype = xp.float16) / 16.0
 
 def m_x(index: int) -> Any:
     u'''
@@ -245,7 +245,7 @@ class Field(object):
                      xp.asanyarray(xp.uint8(DIR_3)),
                      xp.asanyarray(xp.uint8(0))),
             self._cells)
-    def get_current_bgr_image(self, cell_size: int) -> Any:
+    def get_current_bgr_image(self, scale: int) -> Any:
         # X 方向, Y 方向への流速を計算する
         ux = signal.convolve2d(
             (xp.where((self._cells & DIR_1) != 0,
@@ -260,7 +260,7 @@ class Field(object):
                       xp.asanyarray(m_x(INDEX_5)), xp.asanyarray(0)) +
              xp.where((self._cells & DIR_6) != 0,
                       xp.asanyarray(m_x(INDEX_6)), xp.asanyarray(0))),
-            AVERAGE, mode = 'same', boundary = 'wrap')[::cell_size,::cell_size]
+            AVERAGE, mode = 'same', boundary = 'wrap')[::scale,::scale]
         uy = signal.convolve2d(
             (xp.where((self._cells & DIR_1) != 0,
                       xp.asanyarray(m_y(INDEX_1)), xp.asanyarray(0)) +
@@ -274,22 +274,22 @@ class Field(object):
                       xp.asanyarray(m_y(INDEX_5)), xp.asanyarray(0)) +
              xp.where((self._cells & DIR_6) != 0,
                       xp.asanyarray(m_y(INDEX_6)), xp.asanyarray(0))),
-            AVERAGE, mode = 'same', boundary = 'wrap')[::cell_size,::cell_size]
-        gh = int(self._height / cell_size)
-        gw = int(self._width / cell_size)
+            AVERAGE, mode = 'same', boundary = 'wrap')[::scale,::scale]
+        gh = self._height // scale
+        gw = self._width // scale
         img = xp.zeros([gh, gw, 3], dtype = xp.uint8)
-        # color B ... -X 方向
+        # color B ... -X 方向への流速
         img[:,:,0] = (
             (xp.max(ux) - ux) * 255 / (xp.max(ux) - xp.min(ux))
         ).astype(xp.uint8)
-        # color G ... -Y 方向
+        # color G ... -Y 方向への流速
         img[:,:,1] = xp.where(
             uy < 0, uy * 255 / xp.min(uy), 0).astype(xp.uint8)
-        # color R ... +Y 方向
+        # color R ... +Y 方向への流速
         img[:,:,2] = xp.where(
             uy > 0, uy * 255 / xp.max(uy), 0).astype(xp.uint8)
         # 円柱のある場所を塗りつぶす
-        img[self._cylinder[::cell_size,::cell_size],:] = 127
+        img[self._cylinder[::scale,::scale],:] = 127
         img = affine_transform(img, xp.array([
             [1, 0, 0],
             [0, math.sqrt(3) / 2, 0],
@@ -324,7 +324,7 @@ def main() -> None:
                         help = 'Field width (default 2048)')
     parser.add_argument('--height', type = int, default = 1024,
                         help = 'Field height (default 1024)')
-    parser.add_argument('--size', type = int, default = 2,
+    parser.add_argument('--scale', type = int, default = 2,
                         help = 'Magnify cell size (default 2)')
     parser.add_argument('--dens', type = float, default = 10,
                         help = 'Density parameter from 0 to 100 (default 10)')
@@ -332,15 +332,18 @@ def main() -> None:
                         help = 'loop count (default 10000)')
     parser.add_argument('--skip', type = int, default = 10,
                         help = 'skip generating image (default 10 times)')
+    parser.add_argument('--skip-first', type = int, default = 0,
+                        help = 'skip first iteration (default 0 times)')
     parser.add_argument('--animation', action = 'store_true',
                         help = 'animation')
     args = parser.parse_args()
     width = args.width
     height = args.height
-    cell_size = args.size
+    scale = args.scale
     dens = args.dens
     loop = args.loop
     skip = args.skip
+    skip_first = args.skip_first
     pool = xp.cuda.MemoryPool(xp.cuda.malloc_managed)
     xp.cuda.set_allocator(pool.malloc)
     ruler = Ruler()
@@ -350,7 +353,7 @@ def main() -> None:
     print('initialized random field')
     waiting = 10
     if args.animation:
-        bgr_img = field.get_current_bgr_image(cell_size)
+        bgr_img = field.get_current_bgr_image(scale)
         bgr_width = bgr_img.shape[1]
         bgr_height = bgr_img.shape[0]
         animation = Animation(bgr_width, bgr_height, 100, outfile = 'fhp.mp4')
@@ -360,10 +363,13 @@ def main() -> None:
         field.flow()
         #print('  collision')
         field.collision()
+        if skip_first and n <= skip_first:
+            print_elapsed_time(start_time, '{} / {}'.format(n, loop))
+            continue
         if skip < 2 or n % skip == 0:
             print_elapsed_time(start_time, '{} / {}'.format(n, loop))
             #print('  bgr_image')
-            bgr_img = field.get_current_bgr_image(cell_size)
+            bgr_img = field.get_current_bgr_image(scale)
             #print('  show')
             cv2.imshow("Ceullular Automata", bgr_img)
             key = cv2.waitKey(waiting)
